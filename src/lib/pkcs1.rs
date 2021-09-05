@@ -11,8 +11,11 @@
 
 use num_traits::{Zero,One};
 use num_bigint::{BigUint,RandBigInt};
+use rand::Rng;
 
 const N_SIZE_LO_LIMIT :u64 = 1;
+const P_MR_TEST_TIMES :u64 = 8;
+const P_MR_BASE_LIMIT :u32 = 0xFF;
 
 trait Prime<T> {
     fn random_prime(bits: u64) -> T;
@@ -38,26 +41,51 @@ impl Prime<BigUint> for BigUint {
     }
 
     fn is_prime(&self) -> bool {
-        let ref x0 = BigUint::zero();
-        let ref x2 = BigUint::one() + BigUint::one();
-    
-        if self % x2 == *x0 {
+        let ref x1 = BigUint::one();
+        let ref x2 = x1 + x1;
+
+        if self == x2 {
+            return true;
+        }
+        if self % x2 == BigUint::zero() {
             return false;
         }
-
-        let mut u = BigUint::one() + BigUint::one();
+        // Miller-Rabin's Test
+        let ref n_minus_1 = self - x1;
+        let mut mrt_times = 1;
         loop {
-            u = u + BigUint::one();
-            if self % x2 == *x0 {
-                continue;
-            }
-            if &u > &self.sqrt() {
+            if mrt_times > P_MR_TEST_TIMES {
                 break;
+            }
+
+            let mut rng = rand::thread_rng();
+            let b = rng.gen_range(BigUint::one()..BigUint::from_slice(&[P_MR_BASE_LIMIT])); // todo: ref n_minus_1 when SampleUniform
+
+            // if n-1 = m*2^s, z = b^(n-1) % n = b^(m*2^s) % n, m is odd number
+            let s = n_minus_1.trailing_zeros();
+            let m = if let Some(s) = s {
+                n_minus_1 >> s
             } else {
-                if self % &u == *x0 {
+                // never to here, if and only if n is even number
+                return false;
+            };
+
+            let mut x = b.modpow(&m, self);
+            let mut result; 
+            for _ in s {
+                result = x.modpow(&(x1+x1), self);
+                // if n is a prime, the solution of x^2≡1(mod n) shall be 1 or (n-1)
+                if &result == x1 && &x != x1 &&  &x != n_minus_1 {
                     return false;
                 }
+                x = result;
             }
+            // if n is a prime, then b^(n-1)≡1 (mod n), so result shall be 1
+            if &x != x1 {
+                return false;
+            }
+
+            mrt_times = mrt_times + 1;
         }
 
         // println!("p = {:?}", self);
@@ -90,6 +118,9 @@ impl Rsa {
         loop {
             p = BigUint::random_prime(bits);
             q = BigUint::random_prime(bits);
+            if p == q {
+                continue;
+            }
             n = &p * &q;
             if n.bits() >= (N_SIZE_LO_LIMIT * 8) {
                 break;
@@ -141,7 +172,6 @@ impl Rsa {
     fn random_epdp_unit(n: &BigUint) -> u64 {
         let u = n.bits();
 
-        use rand::Rng;
         let mut rng = rand::thread_rng();
         let r = rng.gen_range((u>>1)..u);
 
@@ -170,7 +200,7 @@ impl Rsa {
     fn calculate_d(lambda_n: &BigUint, e: &BigUint) -> BigUint {
         let ref x0 = BigUint::zero();
         let ref x1 = BigUint::one();
-    
+
         let mut u = BigUint::zero();
         loop {
             u = u + BigUint::one();
@@ -209,5 +239,11 @@ mod tests {
 
             i_m += BigUint::one();
         }
+    }
+
+    #[test]
+    fn rsa_prime_check() {
+        let rsa = Rsa::new(16);
+        println!("{:#?}", rsa);
     }
 }
