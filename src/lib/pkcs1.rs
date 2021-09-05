@@ -10,7 +10,7 @@
 --*/
 
 use num_traits::{Zero,One};
-use num_bigint::{BigUint,RandBigInt};
+use num_bigint::{BigUint,RandBigInt,BigInt,Sign};
 use rand::Rng;
 
 const N_SIZE_LO_LIMIT :u64 = 1;
@@ -184,9 +184,10 @@ impl Rsa {
                 break;
             }
         }
+        // :l is \lambda(n) in (pkcs) #1
         let l = (&p - &x1) * (&q - &x1);
         let e = Self::calculate_e(&l, &n);
-        let d = Self::calculate_d(&l, &e);
+        let d = Self::calculate_d(&l, &n, &e);
         let u = Self::random_epdp_unit(&n);
 
         Self { inner: Key { p, q, n, e, d, u } }
@@ -227,6 +228,35 @@ impl Rsa {
         Self::gcd(min, &(max % min))
     }
 
+    fn gcd_ex(a: &BigInt, b: &BigInt) -> (BigInt, BigInt, BigInt) {
+        let mut q;
+        let mut d;
+        let mut r;
+        if a > b {
+            d = a.clone(); r = b.clone();
+        } else {
+            d = b.clone(); r = a.clone();
+        }
+        let mut u = BigInt::one();
+        let mut v = BigInt::zero();
+        let mut s = BigInt::zero();
+        let mut t = BigInt::one();
+
+        while !r.is_zero() {
+            // q, r = divmod(d, r)
+            let p = r.clone(); q = &d / &r; r = &d % &r; d = p;
+            // gcd(a, b) = ax + by
+            let p = u; u = s.clone(); s = p - &q * &s;
+            let p = v; v = t.clone(); t = p - &q * &t; 
+        }
+        
+        if a > b {
+            return (d, u, v);
+        } else {
+            return (d, v, u);
+        }
+    }
+
     fn random_epdp_unit(n: &BigUint) -> u64 {
         let u = n.bits();
 
@@ -244,29 +274,28 @@ impl Rsa {
         u
     }
 
-    fn calculate_e(lambda_n: &BigUint, n: &BigUint) -> BigUint {
+    fn calculate_e(l: &BigUint, n: &BigUint) -> BigUint {
         let mut rng = rand::thread_rng();
         loop {
             let u = rng.gen_biguint_range(&BigUint::new(vec![3]), n);
-            if Self::gcd(lambda_n, &u).is_one() {
+            if Self::gcd(l, &u).is_one() {
                 // println!("e = {:?}", u);
                 return u;
             }
         }
     }
 
-    fn calculate_d(lambda_n: &BigUint, e: &BigUint) -> BigUint {
-        let ref x0 = BigUint::zero();
-        let ref x1 = BigUint::one();
+    fn calculate_d(l: &BigUint, n: &BigUint, e: &BigUint) -> BigUint {
+        let (_, _, d) = Self::gcd_ex (
+            &BigInt::from_slice(Sign::Plus, l.to_u32_digits().as_slice()),
+            &BigInt::from_slice(Sign::Plus, e.to_u32_digits().as_slice()),
+        );
 
-        let mut u = BigUint::zero();
-        loop {
-            u = u + BigUint::one();
-            if (e * &u - x1) % lambda_n == *x0 {
-                // println!("d = {:?}", u);
-                return u
-            }
-        }
+        let n_as_int = BigInt::from_slice(Sign::Plus, n.to_u32_digits().as_slice());
+        let d = &d % &n_as_int;
+        let d = if d < BigInt::zero() { d + n_as_int } else { d };
+
+        d.to_biguint().unwrap()
     }
 }
 
