@@ -14,13 +14,15 @@ use num_bigint::{BigUint,RandBigInt};
 use rand::Rng;
 
 const N_SIZE_LO_LIMIT :u64 = 1;
-const P_MR_TEST_TIMES :u64 = 8;
-const P_MR_BASE_LIMIT :u32 = 0xFF;
+const P_TEST_FM_LIMIT :u32 = 0xF;
 
 trait Prime<T> {
     fn random_prime(bits: u64) -> T;
 
     fn is_prime(&self) -> bool;
+    fn prime_test_of_trial_division(&self) -> bool;
+    fn prime_test_of_fermat(&self) -> bool;
+    fn prime_test_of_miller(&self) -> bool;
 }
 
 impl Prime<BigUint> for BigUint {
@@ -44,22 +46,78 @@ impl Prime<BigUint> for BigUint {
         let ref x1 = BigUint::one();
         let ref x2 = x1 + x1;
 
-        if self == x2 {
-            return true;
-        }
         if self % x2 == BigUint::zero() {
             return false;
         }
-        // Miller-Rabin's Test
-        let ref n_minus_1 = self - x1;
-        let mut mrt_times = 1;
+
+        if !self.prime_test_of_fermat() {
+            return false;
+        }
+
+        if !self.prime_test_of_miller() {
+            return false;
+        }
+
+        return true;
+    }
+
+    fn prime_test_of_trial_division(&self) -> bool {
+        let ref x0 = BigUint::zero();
+        let ref x2 = BigUint::one() + BigUint::one();
+
+        let mut u = BigUint::one() + BigUint::one();
         loop {
-            if mrt_times > P_MR_TEST_TIMES {
+            u = u + BigUint::one();
+            if self % x2 == *x0 {
+                continue;
+            }
+            if &u > &self.sqrt() {
+                break;
+            } else {
+                if self % &u == *x0 {
+                    return false;
+                }
+            }
+        }
+
+        // println!("p = {:?}", self);
+        return true;
+    }
+
+    fn prime_test_of_fermat(&self) -> bool {
+        let ref x1 = BigUint::one();
+
+        let mut b = x1 + x1;
+        let ref n_minus_1 = self - x1;
+        loop {
+            if b >= BigUint::from_slice(&[P_TEST_FM_LIMIT]) || &b > self {
                 break;
             }
+            let ref result = b.modpow(&n_minus_1, self);
+            if result != x1 {
+                return false;
+            }
 
-            let mut rng = rand::thread_rng();
-            let b = rng.gen_range(BigUint::one()..BigUint::from_slice(&[P_MR_BASE_LIMIT])); // todo: ref n_minus_1 when SampleUniform
+            b = b + x1;
+        }
+
+        return true;
+    }
+
+    fn prime_test_of_miller(&self) -> bool {
+        let ref x1 = BigUint::one();
+        let ref x2 = x1 + x1;
+
+        if self == x2 {
+            return true;
+        }
+        // Miller-Rabin's Test
+        let mut b = x1 + x1;
+        let ref n_minus_1 = self - x1;
+        loop {
+            if b >= BigUint::from_slice(&[P_TEST_FM_LIMIT]) || &b > self {
+                break;
+            }
 
             // if n-1 = m*2^s, z = b^(n-1) % n = b^(m*2^s) % n, m is odd number
             let s = n_minus_1.trailing_zeros();
@@ -85,7 +143,7 @@ impl Prime<BigUint> for BigUint {
                 return false;
             }
 
-            mrt_times = mrt_times + 1;
+            b = b + x1;
         }
 
         // println!("p = {:?}", self);
@@ -220,9 +278,12 @@ mod tests {
     fn rsa_ep_dp_test() {
         let rsa = Rsa::new(8);
         println!("{:#?}", rsa);
-        assert_eq!(&rsa.inner.n, &(&rsa.inner.p * &rsa.inner.q));
-        assert!(&rsa.inner.e < &rsa.inner.n);
-        assert!(Rsa::gcd(&rsa.inner.e, &((&rsa.inner.p - BigUint::one())*(&rsa.inner.p - BigUint::one()))) == BigUint::one());
+
+        let ref n = &rsa.inner.p * &rsa.inner.q;
+        assert_eq!(&rsa.inner.n, n);
+
+        let ref l = (&rsa.inner.p - BigUint::one()) * (&rsa.inner.p - BigUint::one());
+        assert!(Rsa::gcd(&rsa.inner.e, l) == BigUint::one());
 
         let mut i_m = BigUint::zero();
         loop {
