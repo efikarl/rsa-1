@@ -14,7 +14,6 @@ use num_bigint::{BigUint,RandBigInt,BigInt,Sign};
 use rand::Rng;
 
 const N_SIZE_LO_LIMIT :u64 = 1;
-const P_TEST_FM_LIMIT :u32 = 0xF;
 
 trait Prime<T> {
     fn random_prime(bits: u64) -> T;
@@ -90,7 +89,7 @@ impl Prime<BigUint> for BigUint {
         let mut b = x1 + x1;
         let ref n_minus_1 = self - x1;
         loop {
-            if b >= BigUint::from_slice(&[P_TEST_FM_LIMIT]) || &b > self {
+            if b >= BigUint::from_slice(&[16]) || &b > self {
                 break;
             }
             let ref result = b.modpow(&n_minus_1, self);
@@ -115,7 +114,7 @@ impl Prime<BigUint> for BigUint {
         let mut b = x1 + x1;
         let ref n_minus_1 = self - x1;
         loop {
-            if b >= BigUint::from_slice(&[P_TEST_FM_LIMIT]) || &b > self {
+            if b >= BigUint::from_slice(&[8]) || &b > self {
                 break;
             }
 
@@ -168,6 +167,17 @@ pub struct Rsa {
 
 impl Rsa {
     pub fn new(bits: u64) -> Self {
+        let mut k = Rsa::init(bits);
+
+        while !k.check() {
+            k = Rsa::init(bits);
+        }
+        // println!("{:#?}", k);
+
+        k
+    }
+
+    pub fn init(bits: u64) -> Self {
         let x1 = BigUint::one();
 
         let mut p;
@@ -297,6 +307,30 @@ impl Rsa {
 
         d.to_biguint().unwrap()
     }
+
+    fn check(&self) -> bool {
+        let x1 = BigUint::one();
+        let rsa = Self::init(8);
+        
+        let l = (&rsa.inner.p - &x1) * (&rsa.inner.q - &x1);
+        if &rsa.inner.e * &rsa.inner.d % l != x1 {
+            return false;
+        }
+        let mut i_m = BigUint::zero();
+        loop {
+            if i_m >= BigUint::from_slice(&[8]) {
+                break;
+            }
+            let o_c = rsa.ep(&i_m);
+            let o_m = rsa.dp(&o_c);
+            if i_m != o_m {
+                return false;
+            }
+
+            i_m += BigUint::one();
+        }
+        return true;
+    }
 }
 
 #[cfg(test)]
@@ -332,8 +366,8 @@ mod tests {
     }
 
     #[test]
-    fn rsa_prime_check() {
-        let rsa = Rsa::new(16);
+    fn rsa_prime_test() {
+        let rsa = Rsa::new(1024);
         println!("{:#?}", rsa);
     }
 }
