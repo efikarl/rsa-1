@@ -89,7 +89,7 @@ impl Prime<BigUint> for BigUint {
         let mut b = x1 + x1;
         let ref n_minus_1 = self - x1;
         loop {
-            if b >= BigUint::from_slice(&[16]) || &b > self {
+            if b >= BigUint::from_slice(&[8]) || &b > self {
                 break;
             }
             let ref result = b.modpow(&n_minus_1, self);
@@ -104,41 +104,40 @@ impl Prime<BigUint> for BigUint {
     }
 
     fn prime_test_of_miller(&self) -> bool {
+        let ref x0 = BigUint::zero();
         let ref x1 = BigUint::one();
         let ref x2 = x1 + x1;
 
-        if self == x2 {
-            return true;
+        if self % x2 == *x0 {
+            return false;
         }
         // Miller-Rabin's Test
         let mut b = x1 + x1;
-        let ref n_minus_1 = self - x1;
+        let mut n_minus_1 = self - x1;
+
         loop {
-            if b >= BigUint::from_slice(&[8]) || &b > self {
+            if b >= BigUint::from_slice(&[4]) {
+                break;
+            }
+            if b >= n_minus_1 {
                 break;
             }
 
-            // if n-1 = m*2^s, z = b^(n-1) % n = b^(m*2^s) % n, m is odd number
-            let s = n_minus_1.trailing_zeros();
-            let m = if let Some(s) = s {
-                n_minus_1 >> s
-            } else {
-                // never to here, if and only if n is even number
-                return false;
-            };
+            let mut x = b.clone();
+            let mut r = BigUint::one();
+            while &n_minus_1 != x0 {
+                if n_minus_1.bit(0) {
+                    r = &r * &x % self;
+                };
 
-            let mut x = b.modpow(&m, self);
-            let mut result; 
-            for _ in s {
-                result = x.modpow(&(x1+x1), self);
-                // if n is a prime, the solution of x^2≡1(mod n) shall be 1 or (n-1)
-                if &result == x1 && &x != x1 &&  &x != n_minus_1 {
+                let s = x.clone();
+                x = &x * &x % self;
+                if &x == x1 && !(s == *x1 || s == n_minus_1) {
                     return false;
-                }
-                x = result;
+                };
+                n_minus_1 = &n_minus_1 >> 1;
             }
-            // if n is a prime, then b^(n-1)≡1 (mod n), so result shall be 1
-            if &x != x1 {
+            if !r.is_one() {
                 return false;
             }
 
