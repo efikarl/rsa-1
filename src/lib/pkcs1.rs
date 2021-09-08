@@ -341,12 +341,6 @@ mod tests {
         let rsa = Rsa::new(8);
         println!("{:#?}", rsa);
 
-        let ref n = &rsa.inner.p * &rsa.inner.q;
-        assert_eq!(&rsa.inner.n, n);
-
-        let ref l = (&rsa.inner.p - BigUint::one()) * (&rsa.inner.p - BigUint::one());
-        assert!(Rsa::gcd(&rsa.inner.e, l) == BigUint::one());
-
         let mut i_m = BigUint::zero();
         loop {
             if &i_m >= &rsa.inner.n {
@@ -365,8 +359,43 @@ mod tests {
     }
 
     #[test]
+    fn rsa_test_n() {
+        let rsa = Rsa::new(8);
+        println!("{:#?}", rsa);
+
+        let ref n = &rsa.inner.p * &rsa.inner.q;
+        assert_eq!(&rsa.inner.n, n);
+    }
+
+    #[test]
+    fn rsa_test_e_1() {
+        let rsa = Rsa::new(8);
+        println!("{:#?}", rsa);
+
+        assert!(rsa.inner.e < &rsa.inner.p * &rsa.inner.q);
+    }
+
+    #[test]
+    fn rsa_test_e_2() {
+        let rsa = Rsa::new(8);
+        println!("{:#?}", rsa);
+
+        let ref l = (&rsa.inner.p - BigUint::one()) * (&rsa.inner.q - BigUint::one());
+        assert_eq!(BigUint::one(), Rsa::gcd(&rsa.inner.e, l));
+    }
+
+    #[test]
+    fn rsa_test_d() {
+        let rsa = Rsa::new(8);
+        println!("{:#?}", rsa);
+
+        let ref l = (&rsa.inner.p - BigUint::one()) * (&rsa.inner.q - BigUint::one());
+        assert_eq!(BigUint::one(), &rsa.inner.e * &rsa.inner.d % l);
+    }
+
+    #[test]
     fn rsa_prime_test() {
-        let rsa = Rsa::new(1024);
+        let rsa = Rsa::new(512);
         println!("{:#?}", rsa);
     }
 }

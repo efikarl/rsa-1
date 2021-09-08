@@ -15,7 +15,7 @@ use crate::lib::pkcs1;
 
 
 fn main() {
-    let rsa = pkcs1::Rsa::new(8);
+    let rsa = pkcs1::Rsa::new(512);
 
     println!("{:#?}", rsa);
 }
